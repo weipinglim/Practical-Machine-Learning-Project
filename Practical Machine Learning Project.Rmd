@@ -2,7 +2,7 @@
 title: "Practical Machine Learning Project"
 author: "Lim Wei Ping"
 date: "March 21, 2015"
-output: html_document
+output: pdf_document
 ---
 ## Introduction
 The aim of this project is to build a model to predict the manner in which 6 participants perform the barbell lifts. Twenty test cases are provided for prediction.
@@ -14,7 +14,7 @@ The data used in this project is from the Weight Lifting Exercise dataset (http:
 A set of training data consisting of 19622 records and 160 variables. The variable "classe"" represent the manner in which the participants lift the dumbell. It is a factor consisting of 5 levels - "A", "B", "C", "D" and "E". 
 
 There are 38 variables associated with each of the 4 sensors (belt, forearm, amr and dumbell) that record readings such as the roll, pitch, yaw, acceleration, gyro. There are also 7 variables that are not related to signals collected from the on-body sensors. We observe that there are many variables with multiple NAs or empty records. 
-```{r, warning = FALSE, message =FALSE}
+```{r, warning = FALSE, message =FALSE, results='hide'}
 library(dplyr)
 library(caret)
 
@@ -60,7 +60,6 @@ We note that several variables at dispropotionately more important than others. 
 model_rf <- train(classe ~ ., method="rf", trControl=trainControl(method = "cv", number = 4), data = data_training)
 
 impt <- varImp(model_rf)$importance
-impt
 ```
 Testing the accuracy of the model against the test set, we note that the model obtained a high out-of-sample accuracy of 99.35% (i.e an out-of-sample error of 0.65%)
 
