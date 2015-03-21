@@ -1,0 +1,98 @@
+---
+title: "Practical Machine Learning Project"
+author: "Lim Wei Ping"
+date: "March 21, 2015"
+output: html_document
+---
+## Introduction
+The aim of this project is to build a model to predict the manner in which 6 participants perform the barbell lifts. Twenty test cases are provided for prediction.
+
+The data used in this project is from the Weight Lifting Exercise dataset (http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises). In the experiment, the 6 particpants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Readings from 4 sensors on their belt, forearm, arm, and dumbell were recorded.  
+
+## Data Exploration and Cleaning
+
+A set of training data consisting of 19622 records and 160 variables. The variable "classe"" represent the manner in which the participants lift the dumbell. It is a factor consisting of 5 levels - "A", "B", "C", "D" and "E". 
+
+There are 38 variables associated with each of the 4 sensors (belt, forearm, amr and dumbell) that record readings such as the roll, pitch, yaw, acceleration, gyro. There are also 7 variables that are not related to signals collected from the on-body sensors. We observe that there are many variables with multiple NAs or empty records. 
+```{r, warning = FALSE, message =FALSE}
+library(dplyr)
+library(caret)
+
+data_train <- read.csv("pml-training.csv", header = TRUE)
+str(data_train)
+```
+The variables not from the sensors are the index, name of participants, timestamps etc, confined within the first 7 variables of the dataset. These variables are removed. 
+
+``` {r, warning=FALSE, message=FALSE}
+## Remove non-sensor variables
+data_train <- select(data_train,-c(1:7))
+```
+
+If the number of NA or empty records for a certain variable is reasonable, we can potentially impute the missing records for example, by using the K nearest neighbour algorithm introduced in the course. However we found that all the variables with NA/empty records have very high proportions of NA/empty records - about 98% of the total records. In this case, all variables with NA/empty records are discarded.
+
+```{r, warning=FALSE, message=FALSE}
+## Compute the number of NA/empty records for each variable
+narecords <- sapply(data_train, function(x){sum(is.na(x) | x == "")})
+narecords <- narecords[narecords > 0]
+
+## Remove variables with NA/empty records 
+data_train <- select(data_train, -one_of(names(narecords)))
+```
+
+Excluding the variable "classe", we are left with 52 variables for prediction - the same 13 variables from each sensor on readings for the roll, pitch, yaw, total acceleration as well as reading for the X, Y and Z directions for the gyroscope, accelerometer and magnetometer. 
+
+Next, we subset 30% of the data for cross-validation later.
+
+```{r, warning=FALSE, message=FALSE}
+set.seed(101)
+inTrain <- createDataPartition(y = data_train$classe, p = 0.7, list = FALSE)
+data_testing <- data_train[-inTrain, ]
+data_training <- data_train[inTrain, ]
+```
+
+## Building Prediction Model Using Random Forest
+
+Random Forest is introduced in the class as a highly accurate prediction model. Hence, we will start with building a Random Forest model using the training set. Preliminary testing using the default settings took a very long time, exceeding 12 hours. We therefore use reduce the number of folds used in cross validation to 4 to reduce the time taken to train the model. 
+
+We note that several variables at dispropotionately more important than others. This means that we could run Random Forest again with reduced number of features. 
+
+```{r, warning=FALSE, message=FALSE}
+model_rf <- train(classe ~ ., method="rf", trControl=trainControl(method = "cv", number = 4), data = data_training)
+
+impt <- varImp(model_rf)$importance
+impt
+```
+Testing the accuracy of the model against the test set, we note that the model obtained a high out-of-sample accuracy of 99.35% (i.e an out-of-sample error of 0.65%)
+
+```{r, warning=FALSE, message=FALSE}
+result_testing <- predict(model_rf, data_testing)
+confusionMatrix(data_testing$classe, result_testing)
+```
+
+## Comparing Against a Random Forest Model with Reduced Number of  Features
+In practice, it is desirable to reduce the number of features used into the prediction model for simplicity and also to lower cost. We can try to build another Random Forest modesl using only variables with importance more than 10. 
+
+```{r, warning=FALSE, message=FALSE}
+imptvariables <- mutate(impt, variable = rownames(impt)) %>%
+        filter(Overall > 10)
+
+data_training_reduced <- select(data_training, one_of(imptvariables$variable), matches("classe"))
+```
+
+The out-of-sample accuracy is slightly lower than the model built using 52 variables but is still very high at 98.64% (i.e out-sample-error of 1.36%).
+
+```{r, warning=FALSE, message=FALSE}
+model_rf_reduced <- train(classe ~ ., method="rf", trControl=trainControl(method = "cv", number = 4), data = data_training_reduced)
+
+result_testing_reduced <- predict(model_rf_reduced, data_testing)
+confusionMatrix(data_testing$classe, result_testing_reduced)
+
+```
+
+## Model Selection to Predict the 20 Test Cases
+As accuracy of the model is the sole consideration in this project, we will choose to run the 20 test cases using the first Random Forest model with 52 features. The results of the prediction are:
+
+```{r, warning=FALSE, message=FALSE}
+data_test <- read.csv("pml-testing.csv", header = TRUE)
+predict(model_rf, data_test)
+```
